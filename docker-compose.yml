@@ -1,0 +1,68 @@
+version: "3.8"
+services:
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:latest
+    network_mode: "host"
+    ports:
+      - "${CADVISOR_PORT}:8080"
+    volumes: 
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+      - "/dev/disk/:/dev/disk:ro"
+    privileged: true
+    devices: 
+      - "/dev/kmsg"
+
+  node-exporter:
+    container_name: node-exporter
+    image: prom/node-exporter:latest
+    network_mode: "host"
+    ports:
+      - "${NODE_EXPORTER_PORT}:9100"
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/:/rootfs:ro"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    network_mode: "host"
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes: 
+      - "./prometheus.yml:/etc/prometheus/prometheus.yml"
+    privileged: true
+    depends_on:
+      - cadvisor
+      - node-exporter
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:latest
+    network_mode: "host"
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    environment:
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - DS_PROMETHEUS=prometheus
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    volumes: 
+      - "grafana-data:/var/lib/grafana"
+      - "./datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml"
+      - "./dashboards:/var/lib/grafana/dashboards"
+      - "./dashboard-provider.yaml:/etc/grafana/provisioning/dashboards/dashboard-provider.yaml"
+    privileged: true
+    depends_on:
+      - prometheus
+
+volumes:
+  grafana-data:
